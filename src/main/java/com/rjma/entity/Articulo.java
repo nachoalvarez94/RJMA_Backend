@@ -5,10 +5,11 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "clientes")
+@Table(name = "articulos")
 @Getter
 @Setter
 @Builder
@@ -16,7 +17,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
-public class Cliente {
+public class Articulo {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -26,26 +27,14 @@ public class Cliente {
     @Column(nullable = false, length = 150)
     private String nombre;
 
-    @Column(nullable = false, length = 255)
-    private String direccion;
+    @Column(nullable = false, precision = 10, scale = 2)
+    private BigDecimal precio;
 
-    @Column(length = 150)
-    private String email;
+    @Column(name = "codigo_interno", length = 50)
+    private String codigoInterno;
 
-    @Column(nullable = false, length = 20)
-    private String telefono;
-
-    @Column(name = "nombre_comercio", length = 150)
-    private String nombreComercio;
-
-    @Column(length = 100)
-    private String poblacion;
-
-    @Column(length = 100)
-    private String municipio;
-
-    @Column(name = "documento_fiscal", length = 20)
-    private String documentoFiscal;
+    @Column(name = "codigo_barras", length = 50)
+    private String codigoBarras;
 
     @Column(nullable = false)
     @Builder.Default
