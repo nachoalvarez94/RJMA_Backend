@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 @Data
 public class PedidoLineaRequestDto {
 
+    @NotNull
     private Long articuloId;
 
     @NotNull
