@@ -46,6 +46,10 @@ public class FacturaService {
             throw new BadRequestException("El pedido " + pedidoId + " ya ha sido facturado");
         }
 
+        if (facturaRepository.existsByPedidoId(pedidoId)) {
+            throw new BadRequestException("Ya existe una factura para el pedido " + pedidoId);
+        }
+
         // 2. Cargar líneas del pedido
         List<PedidoLinea> pedidoLineas = pedidoLineaRepository.findByPedidoId(pedidoId);
 
@@ -67,7 +71,7 @@ public class FacturaService {
             BigDecimal cuotaIva = subtotal.multiply(IVA_RATE)
                     .setScale(2, RoundingMode.HALF_UP);
 
-            BigDecimal totalLinea = subtotal.add(cuotaIva);
+            BigDecimal totalLinea = subtotal.add(cuotaIva).setScale(2, RoundingMode.HALF_UP);
 
             FacturaLinea facturaLinea = FacturaLinea.builder()
                     .articulo(pedidoLinea.getArticulo())
@@ -98,9 +102,9 @@ public class FacturaService {
                 .documentoFiscalCliente(pedido.getCliente().getDocumentoFiscal())
                 .fechaEmision(LocalDateTime.now())
                 .estado("EMITIDA")
-                .baseImponible(baseImponible)
-                .impuestos(totalImpuestos)
-                .total(baseImponible.add(totalImpuestos))
+                .baseImponible(baseImponible.setScale(2, RoundingMode.HALF_UP))
+                .impuestos(totalImpuestos.setScale(2, RoundingMode.HALF_UP))
+                .total(baseImponible.add(totalImpuestos).setScale(2, RoundingMode.HALF_UP))
                 .build();
 
         facturaRepository.save(factura);
