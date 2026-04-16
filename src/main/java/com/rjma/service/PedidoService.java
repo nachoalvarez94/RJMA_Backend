@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -89,5 +90,20 @@ public class PedidoService {
         pedidoLineaRepository.saveAll(lineas);
 
         return pedidoMapper.toResponse(pedido, lineas);
+    }
+
+    @Transactional(readOnly = true)
+    public PedidoResponseDto obtenerPorId(Long id) {
+        Pedido pedido = pedidoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado: " + id));
+        List<PedidoLinea> lineas = pedidoLineaRepository.findByPedidoId(id);
+        return pedidoMapper.toResponse(pedido, lineas);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PedidoResponseDto> listarTodos() {
+        return pedidoRepository.findAll().stream()
+                .map(p -> pedidoMapper.toResponse(p, pedidoLineaRepository.findByPedidoId(p.getId())))
+                .collect(Collectors.toList());
     }
 }
