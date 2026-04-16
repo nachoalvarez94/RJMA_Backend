@@ -13,4 +13,6 @@ public interface PedidoRepository extends JpaRepository<Pedido, Long> {
     Optional<Pedido> findByNumero(Long numero);
 
     List<Pedido> findByClienteIdOrderByFechaDesc(Long clienteId);
+
+    Optional<Pedido> findTopByOrderByNumeroDesc();
 }
