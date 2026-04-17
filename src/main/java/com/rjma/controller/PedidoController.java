@@ -1,6 +1,7 @@
 package com.rjma.controller;
 
 import com.rjma.dto.request.PedidoRequestDto;
+import com.rjma.dto.request.PedidoUpdateRequestDto;
 import com.rjma.dto.response.PedidoResponseDto;
 import com.rjma.service.PedidoService;
 import jakarta.validation.Valid;
@@ -26,6 +27,12 @@ public class PedidoController {
     @GetMapping("/{id}")
     public ResponseEntity<PedidoResponseDto> obtenerPorId(@PathVariable Long id) {
         return ResponseEntity.ok(pedidoService.obtenerPorId(id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<PedidoResponseDto> update(@PathVariable Long id,
+                                                     @Valid @RequestBody PedidoUpdateRequestDto dto) {
+        return ResponseEntity.ok(pedidoService.update(id, dto));
     }
 
     @GetMapping
