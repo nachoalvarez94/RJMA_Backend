@@ -1,5 +1,6 @@
 package com.rjma.dto.response;
 
+import com.rjma.entity.EstadoCobro;
 import lombok.Builder;
 import lombok.Value;
 
@@ -20,6 +21,10 @@ public class PedidoResponseDto {
     BigDecimal totalBruto;
     BigDecimal totalDescuento;
     BigDecimal totalFinal;
+    BigDecimal importeCobrado;
+    BigDecimal importePendiente;
+    EstadoCobro estadoCobro;
+    boolean facturable;
     List<PedidoLineaResponseDto> lineas;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

@@ -5,8 +5,10 @@ import com.rjma.dto.request.PedidoRequestDto;
 import com.rjma.dto.response.PedidoResponseDto;
 import com.rjma.entity.Articulo;
 import com.rjma.entity.Cliente;
+import com.rjma.entity.EstadoCobro;
 import com.rjma.entity.Pedido;
 import com.rjma.entity.PedidoLinea;
+import com.rjma.exception.BadRequestException;
 import com.rjma.exception.ResourceNotFoundException;
 import com.rjma.mapper.PedidoMapper;
 import com.rjma.repository.ArticuloRepository;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +48,7 @@ public class PedidoService {
                 .map(p -> p.getNumero() + 1)
                 .orElse(1L);
 
-        // 3. Construir líneas y calcular totales
+        // 3. Construir líneas y calcular totalBruto
         List<PedidoLinea> lineas = new ArrayList<>();
         BigDecimal totalBruto = BigDecimal.ZERO;
 
@@ -54,7 +57,9 @@ public class PedidoService {
             Articulo articulo = articuloRepository.findById(lineaDto.getArticuloId())
                     .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado: " + lineaDto.getArticuloId()));
 
-            BigDecimal subtotal = articulo.getPrecio().multiply(lineaDto.getCantidad());
+            BigDecimal subtotal = articulo.getPrecio()
+                    .multiply(lineaDto.getCantidad())
+                    .setScale(2, RoundingMode.HALF_UP);
 
             PedidoLinea linea = PedidoLinea.builder()
                     .articulo(articulo)
@@ -71,21 +76,49 @@ public class PedidoService {
             totalBruto = totalBruto.add(subtotal);
         }
 
-        // 4. Crear y guardar el pedido
+        BigDecimal totalFinal = totalBruto.setScale(2, RoundingMode.HALF_UP);
+
+        // 4. Calcular estado de cobro
+        BigDecimal importeCobrado = dto.getImporteCobrado() != null
+                ? dto.getImporteCobrado().setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        if (importeCobrado.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BadRequestException("El importe cobrado no puede ser negativo");
+        }
+        if (importeCobrado.compareTo(totalFinal) > 0) {
+            throw new BadRequestException("El importe cobrado no puede superar el total del pedido");
+        }
+
+        EstadoCobro estadoCobro;
+        if (importeCobrado.compareTo(totalFinal) == 0) {
+            estadoCobro = EstadoCobro.COMPLETO;
+        } else if (importeCobrado.compareTo(BigDecimal.ZERO) == 0) {
+            estadoCobro = EstadoCobro.PENDIENTE;
+        } else {
+            estadoCobro = EstadoCobro.PARCIAL;
+        }
+
+        BigDecimal importePendiente = totalFinal.subtract(importeCobrado).setScale(2, RoundingMode.HALF_UP);
+
+        // 5. Crear y guardar el pedido
         Pedido pedido = Pedido.builder()
                 .numero(numero)
                 .cliente(cliente)
                 .fecha(LocalDateTime.now())
                 .estado("BORRADOR")
                 .observaciones(dto.getObservaciones())
-                .totalBruto(totalBruto)
+                .totalBruto(totalFinal)
                 .totalDescuento(BigDecimal.ZERO)
-                .totalFinal(totalBruto)
+                .totalFinal(totalFinal)
+                .importeCobrado(importeCobrado)
+                .importePendiente(importePendiente)
+                .estadoCobro(estadoCobro)
                 .build();
 
         pedidoRepository.save(pedido);
 
-        // 5. Asociar pedido a cada línea y guardarlas
+        // 6. Asociar pedido a cada línea y guardarlas
         lineas.forEach(l -> l.setPedido(pedido));
         pedidoLineaRepository.saveAll(lineas);
 

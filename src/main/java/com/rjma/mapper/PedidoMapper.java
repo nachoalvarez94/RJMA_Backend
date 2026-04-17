@@ -2,6 +2,7 @@ package com.rjma.mapper;
 
 import com.rjma.dto.response.PedidoLineaResponseDto;
 import com.rjma.dto.response.PedidoResponseDto;
+import com.rjma.entity.EstadoCobro;
 import com.rjma.entity.Pedido;
 import com.rjma.entity.PedidoLinea;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,10 @@ public class PedidoMapper {
                 .totalBruto(pedido.getTotalBruto())
                 .totalDescuento(pedido.getTotalDescuento())
                 .totalFinal(pedido.getTotalFinal())
+                .importeCobrado(pedido.getImporteCobrado())
+                .importePendiente(pedido.getImportePendiente())
+                .estadoCobro(pedido.getEstadoCobro())
+                .facturable(EstadoCobro.COMPLETO.equals(pedido.getEstadoCobro()))
                 .lineas(lineas.stream().map(this::toResponseLinea).toList())
                 .createdAt(pedido.getCreatedAt())
                 .updatedAt(pedido.getUpdatedAt())

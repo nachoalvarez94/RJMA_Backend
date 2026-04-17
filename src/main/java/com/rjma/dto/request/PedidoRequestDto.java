@@ -1,10 +1,12 @@
 package com.rjma.dto.request;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Data
@@ -15,7 +17,8 @@ public class PedidoRequestDto {
 
     private String observaciones;
 
-    private String estado;
+    @DecimalMin("0.0")
+    private BigDecimal importeCobrado;
 
     @NotEmpty
     @Valid

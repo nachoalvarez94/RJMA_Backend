@@ -49,6 +49,16 @@ public class Pedido {
     @Column(name = "total_final", precision = 10, scale = 2)
     private BigDecimal totalFinal;
 
+    @Column(name = "importe_cobrado", precision = 10, scale = 2)
+    private BigDecimal importeCobrado;
+
+    @Column(name = "importe_pendiente", precision = 10, scale = 2)
+    private BigDecimal importePendiente;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado_cobro", length = 20)
+    private EstadoCobro estadoCobro;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
