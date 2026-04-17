@@ -1,6 +1,7 @@
 package com.rjma.service;
 
 import com.rjma.dto.response.FacturaResponseDto;
+import com.rjma.entity.EstadoCobro;
 import com.rjma.entity.Factura;
 import com.rjma.entity.FacturaLinea;
 import com.rjma.entity.Pedido;
@@ -48,6 +49,10 @@ public class FacturaService {
 
         if (facturaRepository.existsByPedidoId(pedidoId)) {
             throw new BadRequestException("Ya existe una factura para el pedido " + pedidoId);
+        }
+
+        if (!EstadoCobro.COMPLETO.equals(pedido.getEstadoCobro())) {
+            throw new BadRequestException("No se puede facturar un pedido con cobro parcial o pendiente");
         }
 
         // 2. Cargar líneas del pedido
