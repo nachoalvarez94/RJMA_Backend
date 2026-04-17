@@ -8,4 +8,6 @@ import java.util.List;
 public interface PedidoLineaRepository extends JpaRepository<PedidoLinea, Long> {
 
     List<PedidoLinea> findByPedidoId(Long pedidoId);
+
+    void deleteByPedidoId(Long pedidoId);
 }
