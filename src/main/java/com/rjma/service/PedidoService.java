@@ -81,7 +81,7 @@ public class PedidoService {
         // 4. Calcular estado de cobro
         BigDecimal importeCobrado = dto.getImporteCobrado() != null
                 ? dto.getImporteCobrado().setScale(2, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO;
+                : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
         if (importeCobrado.compareTo(BigDecimal.ZERO) < 0) {
             throw new BadRequestException("El importe cobrado no puede ser negativo");
