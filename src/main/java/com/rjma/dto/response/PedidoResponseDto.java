@@ -25,6 +25,7 @@ public class PedidoResponseDto {
     BigDecimal importePendiente;
     EstadoCobro estadoCobro;
     boolean facturable;
+    Long creadoPorId;
     List<PedidoLineaResponseDto> lineas;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;

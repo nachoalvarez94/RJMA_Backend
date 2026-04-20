@@ -27,6 +27,7 @@ public class FacturaMapper {
                 .baseImponible(factura.getBaseImponible())
                 .impuestos(factura.getImpuestos())
                 .total(factura.getTotal())
+                .emitidaPorId(factura.getEmitidaPor() != null ? factura.getEmitidaPor().getId() : null)
                 .lineas(lineas.stream().map(this::toResponseLinea).toList())
                 .pdfPath(factura.getPdfPath())
                 .pdfFileName(factura.getPdfFileName())

@@ -25,6 +25,7 @@ public class FacturaResponseDto {
     BigDecimal baseImponible;
     BigDecimal impuestos;
     BigDecimal total;
+    Long emitidaPorId;
     List<FacturaLineaResponseDto> lineas;
     String pdfPath;
     String pdfFileName;

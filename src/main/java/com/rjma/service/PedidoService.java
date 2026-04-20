@@ -1,5 +1,6 @@
 package com.rjma.service;
 
+import com.rjma.auth.CurrentUserProvider;
 import com.rjma.dto.request.PedidoLineaRequestDto;
 import com.rjma.dto.request.PedidoLineaUpdateRequestDto;
 import com.rjma.dto.request.PedidoRequestDto;
@@ -10,6 +11,7 @@ import com.rjma.entity.Cliente;
 import com.rjma.entity.EstadoCobro;
 import com.rjma.entity.Pedido;
 import com.rjma.entity.PedidoLinea;
+import com.rjma.entity.Usuario;
 import com.rjma.exception.BadRequestException;
 import com.rjma.exception.ResourceNotFoundException;
 import com.rjma.mapper.PedidoMapper;
@@ -37,6 +39,7 @@ public class PedidoService {
     private final PedidoRepository pedidoRepository;
     private final PedidoLineaRepository pedidoLineaRepository;
     private final PedidoMapper pedidoMapper;
+    private final CurrentUserProvider currentUserProvider;
 
     @Transactional
     public PedidoResponseDto crear(PedidoRequestDto dto) {
@@ -45,22 +48,25 @@ public class PedidoService {
         Cliente cliente = clienteRepository.findById(dto.getClienteId())
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado: " + dto.getClienteId()));
 
-        // 2. Generar número de pedido
+        // 2. Resolver usuario actual
+        Usuario currentUser = currentUserProvider.getCurrentUser();
+
+        // 3. Generar número de pedido
         Long numero = pedidoRepository.findTopByOrderByNumeroDesc()
                 .map(p -> p.getNumero() + 1)
                 .orElse(1L);
 
-        // 3. Construir líneas y calcular totalFinal
+        // 4. Construir líneas y calcular totalFinal
         List<PedidoLinea> lineas = buildLineas(dto.getLineas().stream()
                 .map(l -> new LineaInput(l.getArticuloId(), l.getCantidad()))
                 .toList());
 
         BigDecimal totalFinal = calcularTotal(lineas);
 
-        // 4. Calcular cobro
+        // 5. Calcular cobro
         CobroResult cobro = calcularCobro(dto.getImporteCobrado(), totalFinal);
 
-        // 5. Crear y guardar el pedido
+        // 6. Crear y guardar el pedido
         Pedido pedido = Pedido.builder()
                 .numero(numero)
                 .cliente(cliente)
@@ -73,6 +79,7 @@ public class PedidoService {
                 .importeCobrado(cobro.importeCobrado())
                 .importePendiente(cobro.importePendiente())
                 .estadoCobro(cobro.estadoCobro())
+                .creadoPor(currentUser)
                 .build();
 
         pedidoRepository.save(pedido);
@@ -93,6 +100,12 @@ public class PedidoService {
 
         if ("FACTURADO".equals(pedido.getEstado())) {
             throw new BadRequestException("No se puede modificar un pedido facturado");
+        }
+
+        // 2. Validar propiedad del pedido
+        Usuario currentUser = currentUserProvider.getCurrentUser();
+        if (pedido.getCreadoPor() != null && !pedido.getCreadoPor().getId().equals(currentUser.getId())) {
+            throw new BadRequestException("No tienes permiso para modificar este pedido");
         }
 
         // 2. Construir nuevas líneas y recalcular total
@@ -134,7 +147,8 @@ public class PedidoService {
 
     @Transactional(readOnly = true)
     public List<PedidoResponseDto> listarTodos() {
-        return pedidoRepository.findAll().stream()
+        Usuario currentUser = currentUserProvider.getCurrentUser();
+        return pedidoRepository.findByCreadoPorId(currentUser.getId()).stream()
                 .map(p -> pedidoMapper.toResponse(p, pedidoLineaRepository.findByPedidoId(p.getId())))
                 .collect(Collectors.toList());
     }

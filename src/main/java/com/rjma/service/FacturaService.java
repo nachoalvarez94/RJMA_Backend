@@ -1,11 +1,13 @@
 package com.rjma.service;
 
+import com.rjma.auth.CurrentUserProvider;
 import com.rjma.dto.response.FacturaResponseDto;
 import com.rjma.entity.EstadoCobro;
 import com.rjma.entity.Factura;
 import com.rjma.entity.FacturaLinea;
 import com.rjma.entity.Pedido;
 import com.rjma.entity.PedidoLinea;
+import com.rjma.entity.Usuario;
 import com.rjma.exception.BadRequestException;
 import com.rjma.exception.ResourceNotFoundException;
 import com.rjma.mapper.FacturaMapper;
@@ -36,6 +38,7 @@ public class FacturaService {
     private final FacturaLineaRepository facturaLineaRepository;
     private final FacturaMapper facturaMapper;
     private final FacturaPdfService facturaPdfService;
+    private final CurrentUserProvider currentUserProvider;
 
     @Transactional
     public FacturaResponseDto facturarPedido(Long pedidoId) {
@@ -56,15 +59,21 @@ public class FacturaService {
             throw new BadRequestException("No se puede facturar un pedido con cobro parcial o pendiente");
         }
 
-        // 2. Cargar líneas del pedido
+        // 2. Resolver usuario actual y validar propiedad del pedido
+        Usuario currentUser = currentUserProvider.getCurrentUser();
+        if (pedido.getCreadoPor() != null && !pedido.getCreadoPor().getId().equals(currentUser.getId())) {
+            throw new BadRequestException("No tienes permiso para facturar este pedido");
+        }
+
+        // 4. Cargar líneas del pedido
         List<PedidoLinea> pedidoLineas = pedidoLineaRepository.findByPedidoId(pedidoId);
 
-        // 3. Generar número de factura
+        // 5. Generar número de factura
         Long numeroFactura = facturaRepository.findTopByOrderByNumeroFacturaDesc()
                 .map(f -> f.getNumeroFactura() + 1)
                 .orElse(1L);
 
-        // 4. Construir FacturaLineas y calcular totales
+        // 6. Construir FacturaLineas y calcular totales
         List<FacturaLinea> facturaLineas = new ArrayList<>();
         BigDecimal baseImponible = BigDecimal.ZERO;
         BigDecimal totalImpuestos = BigDecimal.ZERO;
@@ -96,7 +105,7 @@ public class FacturaService {
             totalImpuestos = totalImpuestos.add(cuotaIva);
         }
 
-        // 5. Crear y guardar factura con snapshot del cliente
+        // 7. Crear y guardar factura con snapshot del cliente
         Factura factura = Factura.builder()
                 .numeroFactura(numeroFactura)
                 .pedido(pedido)
@@ -111,19 +120,20 @@ public class FacturaService {
                 .baseImponible(baseImponible.setScale(2, RoundingMode.HALF_UP))
                 .impuestos(totalImpuestos.setScale(2, RoundingMode.HALF_UP))
                 .total(baseImponible.add(totalImpuestos).setScale(2, RoundingMode.HALF_UP))
+                .emitidaPor(currentUser)
                 .build();
 
         facturaRepository.save(factura);
 
-        // 6. Asociar factura a cada línea y guardarlas
+        // 8. Asociar factura a cada línea y guardarlas
         facturaLineas.forEach(l -> l.setFactura(factura));
         facturaLineaRepository.saveAll(facturaLineas);
 
-        // 7. Marcar pedido como facturado
+        // 9. Marcar pedido como facturado
         pedido.setEstado("FACTURADO");
         pedidoRepository.save(pedido);
 
-        // 8. Generar y guardar PDF
+        // 10. Generar y guardar PDF
         facturaPdfService.generarYGuardar(factura, facturaLineas);
 
         return facturaMapper.toResponse(factura, facturaLineas);
@@ -139,7 +149,8 @@ public class FacturaService {
 
     @Transactional(readOnly = true)
     public List<FacturaResponseDto> listarTodas() {
-        return facturaRepository.findAll().stream()
+        Usuario currentUser = currentUserProvider.getCurrentUser();
+        return facturaRepository.findByEmitidaPorId(currentUser.getId()).stream()
                 .map(f -> facturaMapper.toResponse(f, facturaLineaRepository.findByFacturaId(f.getId())))
                 .toList();
     }
