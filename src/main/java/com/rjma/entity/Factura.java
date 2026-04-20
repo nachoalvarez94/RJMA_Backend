@@ -65,6 +65,18 @@ public class Factura {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal total;
 
+    @Column(name = "pdf_path", length = 500)
+    private String pdfPath;
+
+    @Column(name = "pdf_file_name", length = 100)
+    private String pdfFileName;
+
+    @Column(name = "pdf_version")
+    private Integer pdfVersion;
+
+    @Column(name = "pdf_generated_at")
+    private LocalDateTime pdfGeneratedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

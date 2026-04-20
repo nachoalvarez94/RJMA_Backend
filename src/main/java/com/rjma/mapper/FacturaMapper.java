@@ -28,6 +28,10 @@ public class FacturaMapper {
                 .impuestos(factura.getImpuestos())
                 .total(factura.getTotal())
                 .lineas(lineas.stream().map(this::toResponseLinea).toList())
+                .pdfPath(factura.getPdfPath())
+                .pdfFileName(factura.getPdfFileName())
+                .pdfVersion(factura.getPdfVersion())
+                .pdfGeneratedAt(factura.getPdfGeneratedAt())
                 .createdAt(factura.getCreatedAt())
                 .updatedAt(factura.getUpdatedAt())
                 .build();
