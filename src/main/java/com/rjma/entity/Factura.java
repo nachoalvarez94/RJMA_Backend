@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = {"pedido", "cliente"})
+@ToString(exclude = {"pedido", "cliente", "emitidaPor"})
 public class Factura {
 
     @Id
@@ -64,6 +64,10 @@ public class Factura {
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal total;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "emitida_por_id")
+    private Usuario emitidaPor;
 
     @Column(name = "pdf_path", length = 500)
     private String pdfPath;

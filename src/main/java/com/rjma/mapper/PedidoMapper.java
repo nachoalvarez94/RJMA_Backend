@@ -27,6 +27,7 @@ public class PedidoMapper {
                 .importePendiente(pedido.getImportePendiente())
                 .estadoCobro(pedido.getEstadoCobro())
                 .facturable(EstadoCobro.COMPLETO.equals(pedido.getEstadoCobro()))
+                .creadoPorId(pedido.getCreadoPor() != null ? pedido.getCreadoPor().getId() : null)
                 .lineas(lineas.stream().map(this::toResponseLinea).toList())
                 .createdAt(pedido.getCreatedAt())
                 .updatedAt(pedido.getUpdatedAt())

@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = "cliente")
+@ToString(exclude = {"cliente", "creadoPor"})
 public class Pedido {
 
     @Id
@@ -58,6 +58,10 @@ public class Pedido {
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_cobro", length = 20)
     private EstadoCobro estadoCobro;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "creado_por_id")
+    private Usuario creadoPor;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
