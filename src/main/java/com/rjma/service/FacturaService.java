@@ -35,6 +35,7 @@ public class FacturaService {
     private final FacturaRepository facturaRepository;
     private final FacturaLineaRepository facturaLineaRepository;
     private final FacturaMapper facturaMapper;
+    private final FacturaPdfService facturaPdfService;
 
     @Transactional
     public FacturaResponseDto facturarPedido(Long pedidoId) {
@@ -121,6 +122,9 @@ public class FacturaService {
         // 7. Marcar pedido como facturado
         pedido.setEstado("FACTURADO");
         pedidoRepository.save(pedido);
+
+        // 8. Generar y guardar PDF
+        facturaPdfService.generarYGuardar(factura, facturaLineas);
 
         return facturaMapper.toResponse(factura, facturaLineas);
     }

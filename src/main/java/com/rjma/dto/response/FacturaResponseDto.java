@@ -26,6 +26,10 @@ public class FacturaResponseDto {
     BigDecimal impuestos;
     BigDecimal total;
     List<FacturaLineaResponseDto> lineas;
+    String pdfPath;
+    String pdfFileName;
+    Integer pdfVersion;
+    LocalDateTime pdfGeneratedAt;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
 }
