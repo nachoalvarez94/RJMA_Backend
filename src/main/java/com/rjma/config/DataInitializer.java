@@ -30,6 +30,7 @@ public class DataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         crearSiNoExiste("vendedor1", "1234", "Vendedor Uno", "vendedor1@rjma.com", Rol.VENDEDOR);
+        crearSiNoExiste("vendedor2", "1234", "Vendedor Dis", "vendedor2@rjma.com", Rol.VENDEDOR);
         crearSiNoExiste("admin", "admin1234", "Administrador", "admin@rjma.com", Rol.ADMIN);
     }
 
