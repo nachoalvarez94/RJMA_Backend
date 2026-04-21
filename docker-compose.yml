@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16
+    container_name: rjma-postgres
+    environment:
+      POSTGRES_DB: rjma
+      POSTGRES_USER: rjma_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  backend:
+    build: .
+    container_name: rjma-backend
+    depends_on:
+      - db
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/rjma
+      SPRING_DATASOURCE_USERNAME: rjma_user
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_INVOICES_STORAGE_PATH: /data/distridulce/facturas
+      APP_JWT_SECRET: ${APP_JWT_SECRET}
+      APP_JWT_EXPIRATION_MS: ${APP_JWT_EXPIRATION_MS:-86400000}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./facturas:/data/distridulce/facturas
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
