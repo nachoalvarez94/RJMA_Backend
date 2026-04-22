@@ -36,6 +36,8 @@ public class FacturaController {
 
     @GetMapping("/{id}/pdf")
     public ResponseEntity<Resource> descargarPdf(@PathVariable Long id) {
+        // Ownership check: throws BadRequestException if current user doesn't own this factura
+        facturaService.obtenerPorId(id);
         return facturaPdfService.descargar(id);
     }
 }

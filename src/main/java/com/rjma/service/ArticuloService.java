@@ -58,6 +58,35 @@ public class ArticuloService {
         articuloRepository.save(articulo);
     }
 
+    @Transactional
+    public ArticuloResponseDto activar(Long id) {
+        Articulo articulo = findOrThrow(id);
+        articulo.setActivo(true);
+        return articuloMapper.toResponse(articuloRepository.save(articulo));
+    }
+
+    @Transactional
+    public ArticuloResponseDto desactivar(Long id) {
+        Articulo articulo = findOrThrow(id);
+        articulo.setActivo(false);
+        return articuloMapper.toResponse(articuloRepository.save(articulo));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ArticuloResponseDto> buscarAdmin(String nombre, Boolean activo) {
+        List<Articulo> result;
+        if (nombre != null && activo != null) {
+            result = articuloRepository.findByActivoAndNombreContainingIgnoreCase(activo, nombre);
+        } else if (nombre != null) {
+            result = articuloRepository.findByNombreContainingIgnoreCase(nombre);
+        } else if (activo != null) {
+            result = articuloRepository.findByActivo(activo);
+        } else {
+            result = articuloRepository.findAll();
+        }
+        return result.stream().map(articuloMapper::toResponse).toList();
+    }
+
     private Articulo findOrThrow(Long id) {
         return articuloRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado: " + id));

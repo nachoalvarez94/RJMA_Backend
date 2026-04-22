@@ -17,6 +17,7 @@ import com.rjma.repository.PedidoLineaRepository;
 import com.rjma.repository.PedidoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -40,40 +41,109 @@ public class FacturaService {
     private final FacturaPdfService facturaPdfService;
     private final CurrentUserProvider currentUserProvider;
 
+    // ── Vendedor ──────────────────────────────────────────────────────────────
+
     @Transactional
     public FacturaResponseDto facturarPedido(Long pedidoId) {
+        Pedido pedido = validarPedidoFacturable(pedidoId);
 
-        // 1. Buscar y validar pedido
+        Usuario currentUser = currentUserProvider.getCurrentUser();
+        if (pedido.getCreadoPor() != null && !pedido.getCreadoPor().getId().equals(currentUser.getId())) {
+            throw new BadRequestException("No tienes permiso para facturar este pedido");
+        }
+
+        return ejecutarFacturacion(pedido, currentUser);
+    }
+
+    /**
+     * Obtiene una factura comprobando que pertenece al usuario autenticado.
+     * Uso exclusivo de endpoints de vendedor.
+     */
+    @Transactional(readOnly = true)
+    public FacturaResponseDto obtenerPorId(Long id) {
+        Factura factura = facturaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Factura no encontrada: " + id));
+        Usuario currentUser = currentUserProvider.getCurrentUser();
+        if (factura.getEmitidaPor() != null
+                && !factura.getEmitidaPor().getId().equals(currentUser.getId())) {
+            throw new BadRequestException("No tienes permiso para acceder a esta factura");
+        }
+        List<FacturaLinea> lineas = facturaLineaRepository.findByFacturaId(id);
+        return facturaMapper.toResponse(factura, lineas);
+    }
+
+    /**
+     * Obtiene una factura sin restricción de propiedad.
+     * Uso exclusivo de endpoints de administración.
+     */
+    @Transactional(readOnly = true)
+    public FacturaResponseDto obtenerPorIdAdmin(Long id) {
+        Factura factura = facturaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Factura no encontrada: " + id));
+        List<FacturaLinea> lineas = facturaLineaRepository.findByFacturaId(id);
+        return facturaMapper.toResponse(factura, lineas);
+    }
+
+    @Transactional(readOnly = true)
+    public List<FacturaResponseDto> listarTodas() {
+        Usuario currentUser = currentUserProvider.getCurrentUser();
+        return facturaRepository.findByEmitidaPorId(currentUser.getId()).stream()
+                .map(f -> facturaMapper.toResponse(f, facturaLineaRepository.findByFacturaId(f.getId())))
+                .toList();
+    }
+
+    // ── Admin ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Factura un pedido sin validar propiedad (uso exclusivo de ADMIN).
+     * El admin autenticado queda registrado como emitidaPor.
+     *
+     * <p>Se ejecuta siempre en una transacción propia ({@code REQUIRES_NEW}),
+     * suspendiendo cualquier transacción activa en el llamador. Esto garantiza
+     * que, en una facturación masiva, el éxito o fallo de un pedido no afecta
+     * a los demás, independientemente del contexto transaccional del orquestador.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public FacturaResponseDto facturarPedidoAdmin(Long pedidoId) {
+        Pedido pedido = validarPedidoFacturable(pedidoId);
+        Usuario currentUser = currentUserProvider.getCurrentUser();
+        return ejecutarFacturacion(pedido, currentUser);
+    }
+
+    @Transactional(readOnly = true)
+    public List<FacturaResponseDto> listarTodasAdmin() {
+        return facturaRepository.findAll().stream()
+                .map(f -> facturaMapper.toResponse(f, facturaLineaRepository.findByFacturaId(f.getId())))
+                .toList();
+    }
+
+    // ── Helpers privados ──────────────────────────────────────────────────────
+
+    /** Valida que el pedido existe y está en condiciones de ser facturado. */
+    private Pedido validarPedidoFacturable(Long pedidoId) {
         Pedido pedido = pedidoRepository.findById(pedidoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado: " + pedidoId));
 
         if ("FACTURADO".equals(pedido.getEstado())) {
             throw new BadRequestException("El pedido " + pedidoId + " ya ha sido facturado");
         }
-
         if (facturaRepository.existsByPedidoId(pedidoId)) {
             throw new BadRequestException("Ya existe una factura para el pedido " + pedidoId);
         }
-
         if (!EstadoCobro.COMPLETO.equals(pedido.getEstadoCobro())) {
             throw new BadRequestException("No se puede facturar un pedido con cobro parcial o pendiente");
         }
+        return pedido;
+    }
 
-        // 2. Resolver usuario actual y validar propiedad del pedido
-        Usuario currentUser = currentUserProvider.getCurrentUser();
-        if (pedido.getCreadoPor() != null && !pedido.getCreadoPor().getId().equals(currentUser.getId())) {
-            throw new BadRequestException("No tienes permiso para facturar este pedido");
-        }
+    /** Lógica de facturación compartida por vendedor y admin. */
+    private FacturaResponseDto ejecutarFacturacion(Pedido pedido, Usuario emitidaPor) {
+        List<PedidoLinea> pedidoLineas = pedidoLineaRepository.findByPedidoId(pedido.getId());
 
-        // 4. Cargar líneas del pedido
-        List<PedidoLinea> pedidoLineas = pedidoLineaRepository.findByPedidoId(pedidoId);
-
-        // 5. Generar número de factura
         Long numeroFactura = facturaRepository.findTopByOrderByNumeroFacturaDesc()
                 .map(f -> f.getNumeroFactura() + 1)
                 .orElse(1L);
 
-        // 6. Construir FacturaLineas y calcular totales
         List<FacturaLinea> facturaLineas = new ArrayList<>();
         BigDecimal baseImponible = BigDecimal.ZERO;
         BigDecimal totalImpuestos = BigDecimal.ZERO;
@@ -88,7 +158,7 @@ public class FacturaService {
 
             BigDecimal totalLinea = subtotal.add(cuotaIva).setScale(2, RoundingMode.HALF_UP);
 
-            FacturaLinea facturaLinea = FacturaLinea.builder()
+            facturaLineas.add(FacturaLinea.builder()
                     .articulo(pedidoLinea.getArticulo())
                     .nombreArticulo(pedidoLinea.getNombreArticulo())
                     .codigoArticulo(pedidoLinea.getCodigoArticulo())
@@ -98,14 +168,12 @@ public class FacturaService {
                     .tipoIva(TIPO_IVA)
                     .cuotaIva(cuotaIva)
                     .totalLinea(totalLinea)
-                    .build();
+                    .build());
 
-            facturaLineas.add(facturaLinea);
             baseImponible = baseImponible.add(subtotal);
             totalImpuestos = totalImpuestos.add(cuotaIva);
         }
 
-        // 7. Crear y guardar factura con snapshot del cliente
         Factura factura = Factura.builder()
                 .numeroFactura(numeroFactura)
                 .pedido(pedido)
@@ -120,38 +188,19 @@ public class FacturaService {
                 .baseImponible(baseImponible.setScale(2, RoundingMode.HALF_UP))
                 .impuestos(totalImpuestos.setScale(2, RoundingMode.HALF_UP))
                 .total(baseImponible.add(totalImpuestos).setScale(2, RoundingMode.HALF_UP))
-                .emitidaPor(currentUser)
+                .emitidaPor(emitidaPor)
                 .build();
 
         facturaRepository.save(factura);
 
-        // 8. Asociar factura a cada línea y guardarlas
         facturaLineas.forEach(l -> l.setFactura(factura));
         facturaLineaRepository.saveAll(facturaLineas);
 
-        // 9. Marcar pedido como facturado
         pedido.setEstado("FACTURADO");
         pedidoRepository.save(pedido);
 
-        // 10. Generar y guardar PDF
         facturaPdfService.generarYGuardar(factura, facturaLineas);
 
         return facturaMapper.toResponse(factura, facturaLineas);
-    }
-
-    @Transactional(readOnly = true)
-    public FacturaResponseDto obtenerPorId(Long id) {
-        Factura factura = facturaRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Factura no encontrada: " + id));
-        List<FacturaLinea> lineas = facturaLineaRepository.findByFacturaId(id);
-        return facturaMapper.toResponse(factura, lineas);
-    }
-
-    @Transactional(readOnly = true)
-    public List<FacturaResponseDto> listarTodas() {
-        Usuario currentUser = currentUserProvider.getCurrentUser();
-        return facturaRepository.findByEmitidaPorId(currentUser.getId()).stream()
-                .map(f -> facturaMapper.toResponse(f, facturaLineaRepository.findByFacturaId(f.getId())))
-                .toList();
     }
 }

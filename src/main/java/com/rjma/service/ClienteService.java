@@ -65,6 +65,35 @@ public class ClienteService {
         clienteRepository.save(cliente);
     }
 
+    @Transactional
+    public ClienteResponseDto activar(Long id) {
+        Cliente cliente = findOrThrow(id);
+        cliente.setActivo(true);
+        return clienteMapper.toResponse(clienteRepository.save(cliente));
+    }
+
+    @Transactional
+    public ClienteResponseDto desactivar(Long id) {
+        Cliente cliente = findOrThrow(id);
+        cliente.setActivo(false);
+        return clienteMapper.toResponse(clienteRepository.save(cliente));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ClienteResponseDto> buscarAdmin(String nombre, Boolean activo) {
+        List<Cliente> result;
+        if (nombre != null && activo != null) {
+            result = clienteRepository.findByActivoAndNombreContainingIgnoreCase(activo, nombre);
+        } else if (nombre != null) {
+            result = clienteRepository.findByNombreContainingIgnoreCase(nombre);
+        } else if (activo != null) {
+            result = clienteRepository.findByActivo(activo);
+        } else {
+            result = clienteRepository.findAll();
+        }
+        return result.stream().map(clienteMapper::toResponse).toList();
+    }
+
     private Cliente findOrThrow(Long id) {
         return clienteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado: " + id));

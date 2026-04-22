@@ -16,4 +16,8 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
     List<Cliente> findByPoblacionContainingIgnoreCase(String poblacion);
 
     List<Cliente> findByActivoTrue();
+
+    List<Cliente> findByActivo(Boolean activo);
+
+    List<Cliente> findByActivoAndNombreContainingIgnoreCase(Boolean activo, String nombre);
 }
