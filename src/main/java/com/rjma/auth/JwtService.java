@@ -37,19 +37,14 @@ public class JwtService {
     // ── Validación y extracción ───────────────────────────────────────────────
 
     /**
-     * @return username del subject si el token es válido
-     * @throws JwtException si el token es inválido, expirado o malformado
+     * Parsea el token y devuelve el username si es válido, o {@code null} si no lo es.
+     * Un único parsing por request; el filtro no necesita llamar a isTokenValid + extractUsername por separado.
      */
-    public String extractUsername(String token) {
-        return claims(token).getSubject();
-    }
-
-    public boolean isTokenValid(String token) {
+    public String extractUsernameIfValid(String token) {
         try {
-            claims(token);
-            return true;
+            return claims(token).getSubject();
         } catch (JwtException | IllegalArgumentException e) {
-            return false;
+            return null;
         }
     }
 
@@ -64,7 +59,9 @@ public class JwtService {
     }
 
     private SecretKey signingKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(jwtProperties.getSecret());
+        // El secreto está en Base64URL (alfabeto JWT: usa '-' y '_', no '+' y '/').
+        // Decoders.BASE64 estándar rechaza '_' → usar Decoders.BASE64URL obligatoriamente.
+        byte[] keyBytes = Decoders.BASE64URL.decode(jwtProperties.getSecret());
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }
