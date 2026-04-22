@@ -181,7 +181,7 @@ public class PedidoService {
     @Transactional(readOnly = true)
     public List<PedidoResponseDto> listarTodosAdmin(Long vendedorId, Long clienteId,
                                                      EstadoCobro estadoCobro, String estado) {
-        Specification<Pedido> spec = Specification.where(null);
+        Specification<Pedido> spec = (root, query, cb) -> cb.conjunction();
         if (vendedorId != null)   spec = spec.and(PedidoSpecification.conVendedor(vendedorId));
         if (clienteId != null)    spec = spec.and(PedidoSpecification.conCliente(clienteId));
         if (estadoCobro != null)  spec = spec.and(PedidoSpecification.conEstadoCobro(estadoCobro));
