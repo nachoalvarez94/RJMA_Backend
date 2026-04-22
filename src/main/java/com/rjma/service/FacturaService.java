@@ -40,103 +40,18 @@ public class FacturaService {
     private final FacturaPdfService facturaPdfService;
     private final CurrentUserProvider currentUserProvider;
 
+    // ── Vendedor ──────────────────────────────────────────────────────────────
+
     @Transactional
     public FacturaResponseDto facturarPedido(Long pedidoId) {
+        Pedido pedido = validarPedidoFacturable(pedidoId);
 
-        // 1. Buscar y validar pedido
-        Pedido pedido = pedidoRepository.findById(pedidoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado: " + pedidoId));
-
-        if ("FACTURADO".equals(pedido.getEstado())) {
-            throw new BadRequestException("El pedido " + pedidoId + " ya ha sido facturado");
-        }
-
-        if (facturaRepository.existsByPedidoId(pedidoId)) {
-            throw new BadRequestException("Ya existe una factura para el pedido " + pedidoId);
-        }
-
-        if (!EstadoCobro.COMPLETO.equals(pedido.getEstadoCobro())) {
-            throw new BadRequestException("No se puede facturar un pedido con cobro parcial o pendiente");
-        }
-
-        // 2. Resolver usuario actual y validar propiedad del pedido
         Usuario currentUser = currentUserProvider.getCurrentUser();
         if (pedido.getCreadoPor() != null && !pedido.getCreadoPor().getId().equals(currentUser.getId())) {
             throw new BadRequestException("No tienes permiso para facturar este pedido");
         }
 
-        // 4. Cargar líneas del pedido
-        List<PedidoLinea> pedidoLineas = pedidoLineaRepository.findByPedidoId(pedidoId);
-
-        // 5. Generar número de factura
-        Long numeroFactura = facturaRepository.findTopByOrderByNumeroFacturaDesc()
-                .map(f -> f.getNumeroFactura() + 1)
-                .orElse(1L);
-
-        // 6. Construir FacturaLineas y calcular totales
-        List<FacturaLinea> facturaLineas = new ArrayList<>();
-        BigDecimal baseImponible = BigDecimal.ZERO;
-        BigDecimal totalImpuestos = BigDecimal.ZERO;
-
-        for (PedidoLinea pedidoLinea : pedidoLineas) {
-            BigDecimal subtotal = pedidoLinea.getPrecioUnitario()
-                    .multiply(pedidoLinea.getCantidad())
-                    .setScale(2, RoundingMode.HALF_UP);
-
-            BigDecimal cuotaIva = subtotal.multiply(IVA_RATE)
-                    .setScale(2, RoundingMode.HALF_UP);
-
-            BigDecimal totalLinea = subtotal.add(cuotaIva).setScale(2, RoundingMode.HALF_UP);
-
-            FacturaLinea facturaLinea = FacturaLinea.builder()
-                    .articulo(pedidoLinea.getArticulo())
-                    .nombreArticulo(pedidoLinea.getNombreArticulo())
-                    .codigoArticulo(pedidoLinea.getCodigoArticulo())
-                    .precioUnitario(pedidoLinea.getPrecioUnitario())
-                    .cantidad(pedidoLinea.getCantidad())
-                    .subtotal(subtotal)
-                    .tipoIva(TIPO_IVA)
-                    .cuotaIva(cuotaIva)
-                    .totalLinea(totalLinea)
-                    .build();
-
-            facturaLineas.add(facturaLinea);
-            baseImponible = baseImponible.add(subtotal);
-            totalImpuestos = totalImpuestos.add(cuotaIva);
-        }
-
-        // 7. Crear y guardar factura con snapshot del cliente
-        Factura factura = Factura.builder()
-                .numeroFactura(numeroFactura)
-                .pedido(pedido)
-                .cliente(pedido.getCliente())
-                .nombreCliente(pedido.getCliente().getNombre())
-                .direccionCliente(pedido.getCliente().getDireccion())
-                .emailCliente(pedido.getCliente().getEmail())
-                .telefonoCliente(pedido.getCliente().getTelefono())
-                .documentoFiscalCliente(pedido.getCliente().getDocumentoFiscal())
-                .fechaEmision(LocalDateTime.now())
-                .estado("EMITIDA")
-                .baseImponible(baseImponible.setScale(2, RoundingMode.HALF_UP))
-                .impuestos(totalImpuestos.setScale(2, RoundingMode.HALF_UP))
-                .total(baseImponible.add(totalImpuestos).setScale(2, RoundingMode.HALF_UP))
-                .emitidaPor(currentUser)
-                .build();
-
-        facturaRepository.save(factura);
-
-        // 8. Asociar factura a cada línea y guardarlas
-        facturaLineas.forEach(l -> l.setFactura(factura));
-        facturaLineaRepository.saveAll(facturaLineas);
-
-        // 9. Marcar pedido como facturado
-        pedido.setEstado("FACTURADO");
-        pedidoRepository.save(pedido);
-
-        // 10. Generar y guardar PDF
-        facturaPdfService.generarYGuardar(factura, facturaLineas);
-
-        return facturaMapper.toResponse(factura, facturaLineas);
+        return ejecutarFacturacion(pedido, currentUser);
     }
 
     @Transactional(readOnly = true)
@@ -153,5 +68,112 @@ public class FacturaService {
         return facturaRepository.findByEmitidaPorId(currentUser.getId()).stream()
                 .map(f -> facturaMapper.toResponse(f, facturaLineaRepository.findByFacturaId(f.getId())))
                 .toList();
+    }
+
+    // ── Admin ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Factura un pedido sin validar propiedad (uso exclusivo de ADMIN).
+     * El admin autenticado queda registrado como emitidaPor.
+     */
+    @Transactional
+    public FacturaResponseDto facturarPedidoAdmin(Long pedidoId) {
+        Pedido pedido = validarPedidoFacturable(pedidoId);
+        Usuario currentUser = currentUserProvider.getCurrentUser();
+        return ejecutarFacturacion(pedido, currentUser);
+    }
+
+    @Transactional(readOnly = true)
+    public List<FacturaResponseDto> listarTodasAdmin() {
+        return facturaRepository.findAll().stream()
+                .map(f -> facturaMapper.toResponse(f, facturaLineaRepository.findByFacturaId(f.getId())))
+                .toList();
+    }
+
+    // ── Helpers privados ──────────────────────────────────────────────────────
+
+    /** Valida que el pedido existe y está en condiciones de ser facturado. */
+    private Pedido validarPedidoFacturable(Long pedidoId) {
+        Pedido pedido = pedidoRepository.findById(pedidoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado: " + pedidoId));
+
+        if ("FACTURADO".equals(pedido.getEstado())) {
+            throw new BadRequestException("El pedido " + pedidoId + " ya ha sido facturado");
+        }
+        if (facturaRepository.existsByPedidoId(pedidoId)) {
+            throw new BadRequestException("Ya existe una factura para el pedido " + pedidoId);
+        }
+        if (!EstadoCobro.COMPLETO.equals(pedido.getEstadoCobro())) {
+            throw new BadRequestException("No se puede facturar un pedido con cobro parcial o pendiente");
+        }
+        return pedido;
+    }
+
+    /** Lógica de facturación compartida por vendedor y admin. */
+    private FacturaResponseDto ejecutarFacturacion(Pedido pedido, Usuario emitidaPor) {
+        List<PedidoLinea> pedidoLineas = pedidoLineaRepository.findByPedidoId(pedido.getId());
+
+        Long numeroFactura = facturaRepository.findTopByOrderByNumeroFacturaDesc()
+                .map(f -> f.getNumeroFactura() + 1)
+                .orElse(1L);
+
+        List<FacturaLinea> facturaLineas = new ArrayList<>();
+        BigDecimal baseImponible = BigDecimal.ZERO;
+        BigDecimal totalImpuestos = BigDecimal.ZERO;
+
+        for (PedidoLinea pedidoLinea : pedidoLineas) {
+            BigDecimal subtotal = pedidoLinea.getPrecioUnitario()
+                    .multiply(pedidoLinea.getCantidad())
+                    .setScale(2, RoundingMode.HALF_UP);
+
+            BigDecimal cuotaIva = subtotal.multiply(IVA_RATE)
+                    .setScale(2, RoundingMode.HALF_UP);
+
+            BigDecimal totalLinea = subtotal.add(cuotaIva).setScale(2, RoundingMode.HALF_UP);
+
+            facturaLineas.add(FacturaLinea.builder()
+                    .articulo(pedidoLinea.getArticulo())
+                    .nombreArticulo(pedidoLinea.getNombreArticulo())
+                    .codigoArticulo(pedidoLinea.getCodigoArticulo())
+                    .precioUnitario(pedidoLinea.getPrecioUnitario())
+                    .cantidad(pedidoLinea.getCantidad())
+                    .subtotal(subtotal)
+                    .tipoIva(TIPO_IVA)
+                    .cuotaIva(cuotaIva)
+                    .totalLinea(totalLinea)
+                    .build());
+
+            baseImponible = baseImponible.add(subtotal);
+            totalImpuestos = totalImpuestos.add(cuotaIva);
+        }
+
+        Factura factura = Factura.builder()
+                .numeroFactura(numeroFactura)
+                .pedido(pedido)
+                .cliente(pedido.getCliente())
+                .nombreCliente(pedido.getCliente().getNombre())
+                .direccionCliente(pedido.getCliente().getDireccion())
+                .emailCliente(pedido.getCliente().getEmail())
+                .telefonoCliente(pedido.getCliente().getTelefono())
+                .documentoFiscalCliente(pedido.getCliente().getDocumentoFiscal())
+                .fechaEmision(LocalDateTime.now())
+                .estado("EMITIDA")
+                .baseImponible(baseImponible.setScale(2, RoundingMode.HALF_UP))
+                .impuestos(totalImpuestos.setScale(2, RoundingMode.HALF_UP))
+                .total(baseImponible.add(totalImpuestos).setScale(2, RoundingMode.HALF_UP))
+                .emitidaPor(emitidaPor)
+                .build();
+
+        facturaRepository.save(factura);
+
+        facturaLineas.forEach(l -> l.setFactura(factura));
+        facturaLineaRepository.saveAll(facturaLineas);
+
+        pedido.setEstado("FACTURADO");
+        pedidoRepository.save(pedido);
+
+        facturaPdfService.generarYGuardar(factura, facturaLineas);
+
+        return facturaMapper.toResponse(factura, facturaLineas);
     }
 }

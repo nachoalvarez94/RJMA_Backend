@@ -14,4 +14,8 @@ public interface ArticuloRepository extends JpaRepository<Articulo, Long> {
     List<Articulo> findByCodigoBarrasContainingIgnoreCase(String codigoBarras);
 
     List<Articulo> findByActivoTrue();
+
+    List<Articulo> findByActivo(Boolean activo);
+
+    List<Articulo> findByActivoAndNombreContainingIgnoreCase(Boolean activo, String nombre);
 }

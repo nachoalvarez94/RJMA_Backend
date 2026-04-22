@@ -19,7 +19,9 @@ import com.rjma.repository.ArticuloRepository;
 import com.rjma.repository.ClienteRepository;
 import com.rjma.repository.PedidoLineaRepository;
 import com.rjma.repository.PedidoRepository;
+import com.rjma.specification.PedidoSpecification;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -151,6 +153,30 @@ public class PedidoService {
         return pedidoRepository.findByCreadoPorId(currentUser.getId()).stream()
                 .map(p -> pedidoMapper.toResponse(p, pedidoLineaRepository.findByPedidoId(p.getId())))
                 .collect(Collectors.toList());
+    }
+
+    // ── Admin ─────────────────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public List<PedidoResponseDto> listarTodosAdmin(Long vendedorId, Long clienteId,
+                                                     EstadoCobro estadoCobro, String estado) {
+        Specification<Pedido> spec = Specification.where(null);
+        if (vendedorId != null)   spec = spec.and(PedidoSpecification.conVendedor(vendedorId));
+        if (clienteId != null)    spec = spec.and(PedidoSpecification.conCliente(clienteId));
+        if (estadoCobro != null)  spec = spec.and(PedidoSpecification.conEstadoCobro(estadoCobro));
+        if (estado != null)       spec = spec.and(PedidoSpecification.conEstado(estado));
+
+        return pedidoRepository.findAll(spec).stream()
+                .map(p -> pedidoMapper.toResponse(p, pedidoLineaRepository.findByPedidoId(p.getId())))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<PedidoResponseDto> listarPendientesFacturacion() {
+        return pedidoRepository
+                .findByEstadoCobroAndEstadoNot(EstadoCobro.COMPLETO, "FACTURADO").stream()
+                .map(p -> pedidoMapper.toResponse(p, pedidoLineaRepository.findByPedidoId(p.getId())))
+                .toList();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
