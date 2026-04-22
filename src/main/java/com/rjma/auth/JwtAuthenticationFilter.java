@@ -39,14 +39,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = authHeader.substring(BEARER_PREFIX.length());
 
-        if (!jwtService.isTokenValid(token)) {
+        // Un único parsing: si el token es inválido/expirado, username será null
+        String username = jwtService.extractUsernameIfValid(token);
+
+        if (username == null) {
             filterChain.doFilter(request, response);
             return;
         }
 
         // Solo establecer autenticación si el contexto está vacío (evitar doble proceso)
         if (SecurityContextHolder.getContext().getAuthentication() == null) {
-            String username = jwtService.extractUsername(token);
             UserDetails userDetails = usuarioDetailsService.loadUserByUsername(username);
 
             UsernamePasswordAuthenticationToken authToken =

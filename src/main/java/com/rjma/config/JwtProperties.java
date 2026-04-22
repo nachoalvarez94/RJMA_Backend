@@ -12,7 +12,9 @@ import org.springframework.stereotype.Component;
 public class JwtProperties {
 
     /**
-     * Clave HMAC-SHA256 codificada en Base64 (mínimo 256 bits / 32 bytes).
+     * Clave HMAC-SHA256 codificada en Base64URL (alfabeto JWT: usa '-' y '_').
+     * Mínimo 256 bits / 32 bytes en crudo; generarla con:
+     *   openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
      * Cambiar obligatoriamente en producción; usar variable de entorno APP_JWT_SECRET.
      */
     private String secret;
