@@ -139,8 +139,29 @@ public class PedidoService {
         return pedidoMapper.toResponse(pedido, lineas);
     }
 
+    /**
+     * Obtiene un pedido comprobando que pertenece al usuario autenticado.
+     * Uso exclusivo de endpoints de vendedor.
+     */
     @Transactional(readOnly = true)
     public PedidoResponseDto obtenerPorId(Long id) {
+        Pedido pedido = pedidoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado: " + id));
+        Usuario currentUser = currentUserProvider.getCurrentUser();
+        if (pedido.getCreadoPor() != null
+                && !pedido.getCreadoPor().getId().equals(currentUser.getId())) {
+            throw new BadRequestException("No tienes permiso para acceder a este pedido");
+        }
+        List<PedidoLinea> lineas = pedidoLineaRepository.findByPedidoId(id);
+        return pedidoMapper.toResponse(pedido, lineas);
+    }
+
+    /**
+     * Obtiene un pedido sin restricción de propiedad.
+     * Uso exclusivo de endpoints de administración.
+     */
+    @Transactional(readOnly = true)
+    public PedidoResponseDto obtenerPorIdAdmin(Long id) {
         Pedido pedido = pedidoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado: " + id));
         List<PedidoLinea> lineas = pedidoLineaRepository.findByPedidoId(id);

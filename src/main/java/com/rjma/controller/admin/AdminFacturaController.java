@@ -26,7 +26,7 @@ public class AdminFacturaController {
 
     @GetMapping("/{id}")
     public ResponseEntity<FacturaResponseDto> obtenerPorId(@PathVariable Long id) {
-        return ResponseEntity.ok(facturaService.obtenerPorId(id));
+        return ResponseEntity.ok(facturaService.obtenerPorIdAdmin(id));
     }
 
     @PostMapping("/desde-pedido/{pedidoId}")

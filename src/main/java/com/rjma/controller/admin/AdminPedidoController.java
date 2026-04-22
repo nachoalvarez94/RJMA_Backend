@@ -28,7 +28,7 @@ public class AdminPedidoController {
 
     @GetMapping("/{id}")
     public ResponseEntity<PedidoResponseDto> obtenerPorId(@PathVariable Long id) {
-        return ResponseEntity.ok(pedidoService.obtenerPorId(id));
+        return ResponseEntity.ok(pedidoService.obtenerPorIdAdmin(id));
     }
 
     @GetMapping("/pendientes-facturacion")

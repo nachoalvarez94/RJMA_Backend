@@ -17,6 +17,7 @@ import com.rjma.repository.PedidoLineaRepository;
 import com.rjma.repository.PedidoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -54,8 +55,29 @@ public class FacturaService {
         return ejecutarFacturacion(pedido, currentUser);
     }
 
+    /**
+     * Obtiene una factura comprobando que pertenece al usuario autenticado.
+     * Uso exclusivo de endpoints de vendedor.
+     */
     @Transactional(readOnly = true)
     public FacturaResponseDto obtenerPorId(Long id) {
+        Factura factura = facturaRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Factura no encontrada: " + id));
+        Usuario currentUser = currentUserProvider.getCurrentUser();
+        if (factura.getEmitidaPor() != null
+                && !factura.getEmitidaPor().getId().equals(currentUser.getId())) {
+            throw new BadRequestException("No tienes permiso para acceder a esta factura");
+        }
+        List<FacturaLinea> lineas = facturaLineaRepository.findByFacturaId(id);
+        return facturaMapper.toResponse(factura, lineas);
+    }
+
+    /**
+     * Obtiene una factura sin restricción de propiedad.
+     * Uso exclusivo de endpoints de administración.
+     */
+    @Transactional(readOnly = true)
+    public FacturaResponseDto obtenerPorIdAdmin(Long id) {
         Factura factura = facturaRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Factura no encontrada: " + id));
         List<FacturaLinea> lineas = facturaLineaRepository.findByFacturaId(id);
@@ -75,8 +97,13 @@ public class FacturaService {
     /**
      * Factura un pedido sin validar propiedad (uso exclusivo de ADMIN).
      * El admin autenticado queda registrado como emitidaPor.
+     *
+     * <p>Se ejecuta siempre en una transacción propia ({@code REQUIRES_NEW}),
+     * suspendiendo cualquier transacción activa en el llamador. Esto garantiza
+     * que, en una facturación masiva, el éxito o fallo de un pedido no afecta
+     * a los demás, independientemente del contexto transaccional del orquestador.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public FacturaResponseDto facturarPedidoAdmin(Long pedidoId) {
         Pedido pedido = validarPedidoFacturable(pedidoId);
         Usuario currentUser = currentUserProvider.getCurrentUser();
