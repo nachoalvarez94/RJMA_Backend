@@ -1,8 +1,10 @@
 package com.rjma.controller.admin;
 
+import com.rjma.dto.request.AdminPedidoUpdateRequestDto;
 import com.rjma.dto.response.PedidoResponseDto;
 import com.rjma.entity.EstadoCobro;
 import com.rjma.service.PedidoService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -34,5 +36,12 @@ public class AdminPedidoController {
     @GetMapping("/pendientes-facturacion")
     public ResponseEntity<List<PedidoResponseDto>> pendientesFacturacion() {
         return ResponseEntity.ok(pedidoService.listarPendientesFacturacion());
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<PedidoResponseDto> actualizar(
+            @PathVariable Long id,
+            @Valid @RequestBody AdminPedidoUpdateRequestDto dto) {
+        return ResponseEntity.ok(pedidoService.updateAdmin(id, dto));
     }
 }

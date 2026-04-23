@@ -1,6 +1,8 @@
 package com.rjma.service;
 
 import com.rjma.auth.CurrentUserProvider;
+import com.rjma.dto.request.AdminPedidoLineaUpdateRequestDto;
+import com.rjma.dto.request.AdminPedidoUpdateRequestDto;
 import com.rjma.dto.request.PedidoLineaRequestDto;
 import com.rjma.dto.request.PedidoLineaUpdateRequestDto;
 import com.rjma.dto.request.PedidoRequestDto;
@@ -178,6 +180,66 @@ public class PedidoService {
 
     // ── Admin ─────────────────────────────────────────────────────────────────
 
+    @Transactional
+    public PedidoResponseDto updateAdmin(Long id, AdminPedidoUpdateRequestDto dto) {
+
+        Pedido pedido = pedidoRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Pedido no encontrado: " + id));
+
+        if ("FACTURADO".equals(pedido.getEstado())) {
+            throw new BadRequestException("No se puede modificar un pedido facturado");
+        }
+
+        if (dto.getClienteId() != null) {
+            Cliente cliente = clienteRepository.findById(dto.getClienteId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado: " + dto.getClienteId()));
+            pedido.setCliente(cliente);
+        }
+
+        List<PedidoLinea> lineas = buildLineasConDescuento(
+                dto.getLineas().stream()
+                        .map(l -> new LineaInputAdmin(
+                                l.getArticuloId(),
+                                l.getCantidad(),
+                                l.getDescuento() != null ? l.getDescuento() : BigDecimal.ZERO))
+                        .toList());
+
+        BigDecimal totalBruto = lineas.stream()
+                .map(PedidoLinea::getSubtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal totalDescuento = lineas.stream()
+                .map(PedidoLinea::getDescuento)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal totalFinal = lineas.stream()
+                .map(PedidoLinea::getTotalLinea)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        CobroResult cobro = calcularCobro(dto.getImporteCobrado(), totalFinal);
+
+        pedido.setObservaciones(dto.getObservaciones());
+        pedido.setTotalBruto(totalBruto);
+        pedido.setTotalDescuento(totalDescuento);
+        pedido.setTotalFinal(totalFinal);
+        pedido.setImporteCobrado(cobro.importeCobrado());
+        pedido.setImportePendiente(cobro.importePendiente());
+        pedido.setEstadoCobro(cobro.estadoCobro());
+
+        pedidoRepository.save(pedido);
+
+        pedidoLineaRepository.deleteByPedidoId(id);
+        lineas.forEach(l -> l.setPedido(pedido));
+        pedidoLineaRepository.saveAll(lineas);
+
+        return pedidoMapper.toResponse(pedido, lineas);
+    }
+
+
+
     @Transactional(readOnly = true)
     public List<PedidoResponseDto> listarTodosAdmin(Long vendedorId, Long clienteId,
                                                      EstadoCobro estadoCobro, String estado) {
@@ -203,6 +265,41 @@ public class PedidoService {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private record LineaInput(Long articuloId, BigDecimal cantidad) {}
+
+    private record LineaInputAdmin(Long articuloId, BigDecimal cantidad, BigDecimal descuento) {}
+
+    private List<PedidoLinea> buildLineasConDescuento(List<LineaInputAdmin> inputs) {
+        List<PedidoLinea> result = new ArrayList<>();
+        for (LineaInputAdmin input : inputs) {
+            Articulo articulo = articuloRepository.findById(input.articuloId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado: " + input.articuloId()));
+
+            BigDecimal subtotal = articulo.getPrecio()
+                    .multiply(input.cantidad())
+                    .setScale(2, RoundingMode.HALF_UP);
+
+            BigDecimal descuento = input.descuento().setScale(2, RoundingMode.HALF_UP);
+
+            if (descuento.compareTo(subtotal) > 0) {
+                throw new BadRequestException("El descuento no puede superar el subtotal de la línea");
+            }
+
+            BigDecimal totalLinea = subtotal.subtract(descuento).setScale(2, RoundingMode.HALF_UP);
+
+            result.add(PedidoLinea.builder()
+                    .articulo(articulo)
+                    .nombreArticulo(articulo.getNombre())
+                    .codigoArticulo(articulo.getCodigoInterno())
+                    .precioUnitario(articulo.getPrecio())
+                    .cantidad(input.cantidad())
+                    .subtotal(subtotal)
+                    .descuento(descuento)
+                    .totalLinea(totalLinea)
+                    .build());
+        }
+        return result;
+    }
+
 
     private List<PedidoLinea> buildLineas(List<LineaInput> inputs) {
         List<PedidoLinea> lineas = new ArrayList<>();
