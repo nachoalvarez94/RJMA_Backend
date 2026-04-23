@@ -59,9 +59,9 @@ public class JwtService {
     }
 
     private SecretKey signingKey() {
-        // El secreto está en Base64URL (alfabeto JWT: usa '-' y '_', no '+' y '/').
-        // Decoders.BASE64 estándar rechaza '_' → usar Decoders.BASE64URL obligatoriamente.
-        byte[] keyBytes = Decoders.BASE64URL.decode(jwtProperties.getSecret());
+        // El secreto está en Base64 estándar (contiene '/' y '=='); no en Base64URL.
+        // Decoders.BASE64URL rechaza '/' → usar Decoders.BASE64.
+        byte[] keyBytes = Decoders.BASE64.decode(jwtProperties.getSecret());
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }
