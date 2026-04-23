@@ -3,8 +3,10 @@ package com.rjma.controller.admin;
 import com.rjma.dto.response.FacturacionMasivaResponseDto;
 import com.rjma.dto.response.FacturaResponseDto;
 import com.rjma.service.FacturacionMasivaService;
+import com.rjma.service.FacturaPdfService;
 import com.rjma.service.FacturaService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +20,7 @@ public class AdminFacturaController {
 
     private final FacturaService facturaService;
     private final FacturacionMasivaService facturacionMasivaService;
+    private final FacturaPdfService facturaPdfService;
 
     @GetMapping
     public ResponseEntity<List<FacturaResponseDto>> listarTodas() {
@@ -27,6 +30,19 @@ public class AdminFacturaController {
     @GetMapping("/{id}")
     public ResponseEntity<FacturaResponseDto> obtenerPorId(@PathVariable Long id) {
         return ResponseEntity.ok(facturaService.obtenerPorIdAdmin(id));
+    }
+
+    /**
+     * Descarga el PDF de una factura sin restricción de propiedad (solo ADMIN).
+     * La seguridad queda garantizada por /api/admin/** en SecurityConfig.
+     * Delega en FacturaPdfService.descargar(), que valida:
+     *   - que la factura existe (404 si no)
+     *   - que tiene PDF generado (400 si pdfPath es null)
+     *   - que el archivo existe en disco (404 si no)
+     */
+    @GetMapping("/{id}/pdf")
+    public ResponseEntity<Resource> descargarPdf(@PathVariable Long id) {
+        return facturaPdfService.descargar(id);
     }
 
     @PostMapping("/desde-pedido/{pedidoId}")
