@@ -1,5 +1,6 @@
 package com.rjma.dto.request;
 
+import com.rjma.entity.UnidadVenta;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -24,6 +25,9 @@ public class ArticuloRequestDto {
 
     @Size(max = 50)
     private String codigoBarras;
+
+    /** Si no se envía, se usará UNIDAD por defecto. */
+    private UnidadVenta unidadVenta;
 
     private Boolean activo;
 }

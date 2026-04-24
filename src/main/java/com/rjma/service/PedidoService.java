@@ -271,16 +271,19 @@ public class PedidoService {
     private List<PedidoLinea> buildLineasConDescuento(List<LineaInputAdmin> inputs) {
         List<PedidoLinea> result = new ArrayList<>();
         for (LineaInputAdmin input : inputs) {
+            BigDecimal cantidad = validarYNormalizarCantidad(input.cantidad());
+
             Articulo articulo = articuloRepository.findById(input.articuloId())
                     .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado: " + input.articuloId()));
 
             BigDecimal subtotal = articulo.getPrecio()
-                    .multiply(input.cantidad())
+                    .multiply(cantidad)
                     .setScale(2, RoundingMode.HALF_UP);
 
             BigDecimal descuento = input.descuento().setScale(2, RoundingMode.HALF_UP);
 
-            if (descuento.compareTo(subtotal) > 0) {
+            // El descuento solo aplica cuando el subtotal es positivo
+            if (subtotal.compareTo(BigDecimal.ZERO) > 0 && descuento.compareTo(subtotal) > 0) {
                 throw new BadRequestException("El descuento no puede superar el subtotal de la línea");
             }
 
@@ -291,7 +294,7 @@ public class PedidoService {
                     .nombreArticulo(articulo.getNombre())
                     .codigoArticulo(articulo.getCodigoInterno())
                     .precioUnitario(articulo.getPrecio())
-                    .cantidad(input.cantidad())
+                    .cantidad(cantidad)
                     .subtotal(subtotal)
                     .descuento(descuento)
                     .totalLinea(totalLinea)
@@ -300,15 +303,16 @@ public class PedidoService {
         return result;
     }
 
-
     private List<PedidoLinea> buildLineas(List<LineaInput> inputs) {
         List<PedidoLinea> lineas = new ArrayList<>();
         for (LineaInput input : inputs) {
+            BigDecimal cantidad = validarYNormalizarCantidad(input.cantidad());
+
             Articulo articulo = articuloRepository.findById(input.articuloId())
                     .orElseThrow(() -> new ResourceNotFoundException("Artículo no encontrado: " + input.articuloId()));
 
             BigDecimal subtotal = articulo.getPrecio()
-                    .multiply(input.cantidad())
+                    .multiply(cantidad)
                     .setScale(2, RoundingMode.HALF_UP);
 
             lineas.add(PedidoLinea.builder()
@@ -316,13 +320,29 @@ public class PedidoService {
                     .nombreArticulo(articulo.getNombre())
                     .codigoArticulo(articulo.getCodigoInterno())
                     .precioUnitario(articulo.getPrecio())
-                    .cantidad(input.cantidad())
+                    .cantidad(cantidad)
                     .subtotal(subtotal)
                     .descuento(BigDecimal.ZERO)
                     .totalLinea(subtotal)
                     .build());
         }
         return lineas;
+    }
+
+    /**
+     * Valida que la cantidad no sea cero y no tenga más de 2 decimales.
+     * Acepta valores positivos y negativos (devoluciones/abonos).
+     * @return la cantidad normalizada a escala 2
+     */
+    private BigDecimal validarYNormalizarCantidad(BigDecimal cantidad) {
+        if (cantidad.compareTo(BigDecimal.ZERO) == 0) {
+            throw new BadRequestException("La cantidad no puede ser cero");
+        }
+        if (cantidad.scale() > 2) {
+            throw new BadRequestException(
+                    "La cantidad no puede tener más de 2 decimales (recibido: " + cantidad.toPlainString() + ")");
+        }
+        return cantidad.setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal calcularTotal(List<PedidoLinea> lineas) {
@@ -340,7 +360,9 @@ public class PedidoService {
         if (importeCobrado.compareTo(BigDecimal.ZERO) < 0) {
             throw new BadRequestException("El importe cobrado no puede ser negativo");
         }
-        if (importeCobrado.compareTo(totalFinal) > 0) {
+        // Solo aplicable cuando el total es positivo; con totales <= 0 (devoluciones) no hay nada que cobrar
+        if (totalFinal.compareTo(BigDecimal.ZERO) > 0
+                && importeCobrado.compareTo(totalFinal) > 0) {
             throw new BadRequestException("El importe cobrado no puede superar el total del pedido");
         }
 

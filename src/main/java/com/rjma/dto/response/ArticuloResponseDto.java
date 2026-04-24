@@ -1,5 +1,6 @@
 package com.rjma.dto.response;
 
+import com.rjma.entity.UnidadVenta;
 import lombok.Builder;
 import lombok.Value;
 
@@ -15,6 +16,7 @@ public class ArticuloResponseDto {
     BigDecimal precio;
     String codigoInterno;
     String codigoBarras;
+    UnidadVenta unidadVenta;
     Boolean activo;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
