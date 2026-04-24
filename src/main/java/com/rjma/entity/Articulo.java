@@ -36,6 +36,11 @@ public class Articulo {
     @Column(name = "codigo_barras", length = 50)
     private String codigoBarras;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "unidad_venta", length = 20)
+    @Builder.Default
+    private UnidadVenta unidadVenta = UnidadVenta.UNIDAD;
+
     @Column(nullable = false)
     @Builder.Default
     private Boolean activo = true;

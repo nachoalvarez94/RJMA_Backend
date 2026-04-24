@@ -130,6 +130,12 @@ public class FacturaService {
         if (facturaRepository.existsByPedidoId(pedidoId)) {
             throw new BadRequestException("Ya existe una factura para el pedido " + pedidoId);
         }
+        // Pedidos con total <= 0 son devoluciones o abonos: no se facturan como factura ordinaria
+        if (pedido.getTotalFinal() != null
+                && pedido.getTotalFinal().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BadRequestException(
+                    "No se puede facturar un pedido con total cero o negativo (devolución o abono)");
+        }
         if (!EstadoCobro.COMPLETO.equals(pedido.getEstadoCobro())) {
             throw new BadRequestException("No se puede facturar un pedido con cobro parcial o pendiente");
         }
