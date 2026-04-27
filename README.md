@@ -41,3 +41,7 @@ El sistema permite gestionar clientes, artículos, pedidos, facturas y usuarios,
   - precio
   - unidad de venta
 
+
+---
+
+_Última prueba de despliegue automático develop._
