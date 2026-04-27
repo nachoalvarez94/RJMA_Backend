@@ -4,6 +4,7 @@ Backend REST para la gestión comercial de RJMA, pensado para dar soporte a una 
 
 El sistema permite gestionar clientes, artículos, pedidos, facturas y usuarios, separando permisos entre vendedores y administradores.
 
+
 ---
 
 ## Funcionalidades principales
@@ -40,10 +41,3 @@ El sistema permite gestionar clientes, artículos, pedidos, facturas y usuarios,
   - precio
   - unidad de venta
 
-Unidades de venta soportadas:
-
-```java
-UNIDAD,
-CAJA,
-GRANEL,
-PESO
