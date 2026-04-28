@@ -1,0 +1,19 @@
+name: Deploy PROD
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: rjma-prod-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, rjma, backend]
+
+    steps:
+      - name: Deploy prod
+        run: |
+          sudo -n /mnt/fastpool/apps/rjma-prod/scripts/deploy-prod.sh
